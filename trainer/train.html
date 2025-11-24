@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="lv">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RokaRunā — apmācība</title>
+
+  <!-- MediaPipe + TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <h1>Zīmju valodas alfabēta atpazinējs — apmācības režīms</h1>
+
+  <div class="wrap">
+    <div class="stage">
+      <video id="video" width="640" height="480" autoplay muted playsinline aria-label="Kameras straume"></video>
+      <canvas id="canvas" width="640" height="480" aria-label="Zīmētais pārklājums"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="row" role="group" aria-label="Vadība">
+        <label for="label">Mācos burtu:</label>
+        <select id="label" aria-label="Burtu izvēlne">
+          <option>A</option><option>Ā</option><option>B</option><option>C</option><option>Č</option><option>D</option>
+          <option>E</option><option>Ē</option><option>F</option><option>G</option><option>Ģ</option><option>H</option>
+          <option>I</option><option>Ī</option><option>J</option><option>K</option><option>Ķ</option><option>L</option>
+          <option>Ļ</option><option>M</option><option>N</option><option>Ņ</option><option>O</option><option>P</option>
+          <option>R</option><option>S</option><option>Š</option><option>T</option><option>U</option><option>Ū</option>
+          <option>V</option><option>Z</option><option>Ž</option>
+        </select>
+
+        <button id="btnSave">+ Saglabāt žestu</button>
+        <button id="btnTrain">🤖 Apmācīt modeli</button>
+        <button id="btnExport" disabled>⬇️ Eksportēt modeli</button>
+        <button id="btnClear">🗑️ Dzēst visu</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <span class="pill">Stabilizācija: logs 15 kadri</span>
+        <span class="pill">Eksponenciālā izlīdzināšana α=0.35</span>
+        <span class="pill">Min pārliecība: <span id="minConfVal">0.60</span></span>
+        <input id="minConf" type="range" min="0.3" max="0.9" step="0.05" value="0.60"
+          aria-label="Minimālais pārliecības slieksnis" />
+      </div>
+
+      <div class="metrics" style="margin-top:10px">
+        <div class="metric"><b>FPS</b> <span id="mFps">0</span></div>
+        <div class="metric"><b>Latence</b> <span id="mLat">0 ms</span></div>
+        <div class="metric"><b>Prognoze</b> <span id="mPred">—</span></div>
+      </div>
+    </div>
+
+    <div id="letter" aria-live="polite">?</div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Alfabēts</h3>
+      <div id="alphabetGrid" class="alphabet-grid" role="grid" aria-label="Latviešu alfabēts"></div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Paraugu skaits</h3>
+      <div id="counts">Nav saglabātu žestu.</div>
+    </div>
+  </div>
+
+  <script src="./train.js"></script>
+</body>
+</html>
