@@ -3,6 +3,9 @@
 RokaRunā is a real-time Latvian Sign Language (LZV) alphabet gesture recognizer.
 It detects hand poses from the camera stream and predicts which letter of the Latvian alphabet you are signing.
 
+## Test me:
+https://emilijaergle.github.io/rokaruna/ 
+
 The project includes two environments:
 
 1. **Training Environment** (`trainer/`)  
