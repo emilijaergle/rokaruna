@@ -1,4 +1,4 @@
-// ----------------- Globālie elementi -----------------
+// ----------------- Global elements -----------------
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -10,7 +10,7 @@ const mPred = document.getElementById('mPred');
 const minConfInput = document.getElementById('minConf');
 const minConfVal = document.getElementById('minConfVal');
 
-// ----------------- Stāvoklis / veikals -----------------
+// ----------------- Condition / store -----------------
 const store = { MIN_CONFIDENCE: Number(minConfInput.value) };
 minConfVal.textContent = store.MIN_CONFIDENCE.toFixed(2);
 minConfInput.addEventListener('input', () => {
@@ -18,21 +18,21 @@ minConfInput.addEventListener('input', () => {
   minConfVal.textContent = store.MIN_CONFIDENCE.toFixed(2);
 });
 
-// ----------------- Modelis -----------------
+// ----------------- Model -----------------
 let trainedModel = null;
-let labelSet = [];    // klašu secība no model.json
+let labelSet = [];
 let smoothScores = null;
 
-// Stabilizācija
+// Stabilization
 const labelWindow = [];
 const WINDOW_SIZE = 15;
 const ALPHA = 0.35;
 
-// HUD / stāvoklis
+// HUD / condition
 let lastLetter = '?';
 let latestLandmarks = null;
 
-// ----------------- Palīgfunkcijas -----------------
+// ----------------- Auxiliary functions -----------------
 function expSmooth(prev, next, a = ALPHA) { return a * next + (1 - a) * prev; }
 function majority(arr) {
   if (!arr.length) return null;
@@ -75,21 +75,19 @@ function speak(text) {
   synth.speak(utter);
 }
 
-// ----------------- Modelis: ielāde un prognoze -----------------
 async function loadPretrainedModel() {
-  // vispirms nolasa raw JSON, lai dabūtu labelSet
-  const res = await fetch("./model/model.json");
-  if (!res.ok) throw new Error("model.json fetch failed: " + res.status);
-  const raw = await res.json();
+  try {
+    const resp = await fetch("./model/model.json");
+    const raw = await resp.json();
+    labelSet = raw.labelSet || [];
+  } catch (e) {
+    console.warn("Neizdevās nolasīt labelSet no model.json:", e);
+    labelSet = [];
+  }
 
-  labelSet = raw.labelSet || [];
-  console.log("✅ Ielādēts labelSet:", labelSet);
-
-  // pēc tam ielādē pašu modeli (tf.js pats izmantos weightsManifest)
   trainedModel = await tf.loadLayersModel("./model/model.json");
   smoothScores = new Array(labelSet.length).fill(0);
-
-  console.log("✅ Modelis ielādēts. Klašu skaits:", labelSet.length);
+  console.log("✅ Modelis ielādēts. Klases:", labelSet);
 }
 
 function predict(landmarks) {
@@ -106,15 +104,13 @@ function predict(landmarks) {
     const sum = smoothScores.reduce((a, b) => a + b, 0) || 1;
     const norm = smoothScores.map(v => v / sum);
     let maxI = 0, maxV = norm[0];
-    for (let i = 1; i < norm.length; i++) {
-      if (norm[i] > maxV) { maxV = norm[i]; maxI = i; }
-    }
+    for (let i = 1; i < norm.length; i++) { if (norm[i] > maxV) { maxV = norm[i]; maxI = i; } }
     const lbl = labelSet[maxI] || '?';
     return { label: lbl, conf: maxV };
   });
 }
 
-// ----------------- MediaPipe iestatīšana -----------------
+// ----------------- MediaPipe -----------------
 const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
 hands.setOptions({
   maxNumHands: 1,
@@ -127,14 +123,24 @@ hands.onResults(async (results) => {
   const t0 = performance.now();
   ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
   if (results.multiHandLandmarks?.length) {
     const landmarks = results.multiHandLandmarks[0];
     latestLandmarks = landmarks;
 
-    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#22d3ee', lineWidth: 3 });
-    drawLandmarks(ctx, landmarks, { color: '#ff6b6b', radius: 2 });
+    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {
+      color: '#22d3ee',
+      lineWidth: 3
+    });
+    drawLandmarks(ctx, landmarks, {
+      color: '#ff6b6b',
+      radius: 2
+    });
 
     const { label, conf } = predict(landmarks);
     labelWindow.push(conf >= store.MIN_CONFIDENCE ? label : '?');
@@ -156,6 +162,8 @@ hands.onResults(async (results) => {
   mFps.textContent = frameCounter.fps.toString();
   mLat.textContent = `${Math.round(frameCounter.latency)} ms`;
 
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(8, 8, 190, 68);
   ctx.fillStyle = "#fff";
@@ -167,13 +175,12 @@ hands.onResults(async (results) => {
   ctx.restore();
 });
 
-// Kamera
+// Camera
 const camera = new Camera(video, {
   onFrame: async () => { await hands.send({ image: video }); },
   width: 640, height: 480
 });
 
-// ----------------- Alfabēta režģis -----------------
 const LATVIAN_ALPHABET = [
   "A","Ā","B","C","Č","D","E","Ē","F","G","Ģ","H","I","Ī","J","K","Ķ","L","Ļ","M",
   "N","Ņ","O","P","R","S","Š","T","U","Ū","V","Z","Ž"

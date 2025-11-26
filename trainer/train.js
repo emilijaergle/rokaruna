@@ -1,4 +1,4 @@
-// ----------------- Globālie elementi -----------------
+// ----------------- Global elements -----------------
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -17,7 +17,7 @@ const btnTrain = document.getElementById('btnTrain');
 const btnExport = document.getElementById('btnExport');
 const btnClear = document.getElementById('btnClear');
 
-// ----------------- Stāvoklis / veikals -----------------
+// ----------------- Condition / store -----------------
 const store = { MIN_CONFIDENCE: Number(minConfInput.value) };
 minConfVal.textContent = store.MIN_CONFIDENCE.toFixed(2);
 minConfInput.addEventListener('input', () => {
@@ -25,23 +25,23 @@ minConfInput.addEventListener('input', () => {
   minConfVal.textContent = store.MIN_CONFIDENCE.toFixed(2);
 });
 
-// ----------------- Datu kolekcija un modelis -----------------
-const samples = [];   // [ [x1,y1,z1, ...], ... ]
-const labels = [];    // ["A","B",...]
+// ----------------- Data collection and model -----------------
+const samples = [];
+const labels = [];
 let trainedModel = null;
-let labelSet = [];    // apmācīto klašu unikālais saraksts
+let labelSet = [];
 let smoothScores = null;
 
-// Stabilizācija
+// Stabilization
 const labelWindow = [];
 const WINDOW_SIZE = 15;
 const ALPHA = 0.35;
 
-// HUD / stāvoklis
+// HUD / Status
 let lastLetter = '?';
 let latestLandmarks = null;
 
-// ----------------- Palīgfunkcijas -----------------
+// ----------------- Auxiliary functions -----------------
 function expSmooth(prev, next, a = ALPHA) { return a * next + (1 - a) * prev; }
 function majority(arr) {
   if (!arr.length) return null;
@@ -93,7 +93,7 @@ function speak(text) {
   synth.speak(utter);
 }
 
-// ---- Persistences palīgi ----
+// ---- Persistence helpers ----
 function persistSamples() {
   try {
     localStorage.setItem("gestureSamples", JSON.stringify(samples));
@@ -120,7 +120,7 @@ async function tryLoadAnySavedModel() {
   return null;
 }
 
-// ----------------- Datu darbības -----------------
+// ----------------- Data operations -----------------
 function saveSample() {
   if (!latestLandmarks) return alert("Nav rokas datu!");
   const flat = flattenLandmarks(latestLandmarks);
@@ -155,7 +155,7 @@ async function trainModel() {
 
   smoothScores = new Array(labelSet.length).fill(0);
 
-  // lokālai lietošanai – nav kritiski publiskajai daļai
+  // for topical use
   trainedModel.metadata = { labelSet };
 
   persistSamples();
@@ -168,7 +168,6 @@ async function trainModel() {
   updateTrainingStateOnGrid();
 }
 
-// 🔴 SVARĪGI: pareizs export formāts ar labelSet iekš model.json
 async function exportModelFiles() {
   if (!trainedModel) {
     alert("Nav modeļa ko eksportēt.");
@@ -176,7 +175,6 @@ async function exportModelFiles() {
   }
 
   await trainedModel.save(tf.io.withSaveHandler(async (artifacts) => {
-    // tf.js saprotams model.json + mūsu labelSet
     const modelJson = {
       modelTopology: artifacts.modelTopology,
       weightsManifest: [
@@ -231,7 +229,7 @@ async function loadFromLocal() {
       }
     }
 
-    // Modelis
+    // Model
     const mdl = await tryLoadAnySavedModel();
     if (mdl) {
       trainedModel = mdl;
@@ -282,7 +280,6 @@ function predict(landmarks) {
   });
 }
 
-// mazs bugfix: pareizā versija predict funkcijā
 function predict(landmarks) {
   if (!trainedModel || !landmarks) return { label: '?', conf: 0 };
   const flat = flattenLandmarks(landmarks);
@@ -305,7 +302,7 @@ function predict(landmarks) {
   });
 }
 
-// ----------------- MediaPipe iestatīšana -----------------
+// ----------------- MediaPipe -----------------
 const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
 hands.setOptions({
   maxNumHands: 1,
@@ -318,14 +315,24 @@ hands.onResults(async (results) => {
   const t0 = performance.now();
   ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+
   ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
   if (results.multiHandLandmarks?.length) {
     const landmarks = results.multiHandLandmarks[0];
     latestLandmarks = landmarks;
 
-    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color: '#22d3ee', lineWidth: 3 });
-    drawLandmarks(ctx, landmarks, { color: '#ff6b6b', radius: 2 });
+    drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {
+      color: '#22d3ee',
+      lineWidth: 3
+    });
+    drawLandmarks(ctx, landmarks, {
+      color: '#ff6b6b',
+      radius: 2
+    });
 
     const { label, conf } = predict(landmarks);
     labelWindow.push(conf >= store.MIN_CONFIDENCE ? label : '?');
@@ -347,6 +354,8 @@ hands.onResults(async (results) => {
   mFps.textContent = frameCounter.fps.toString();
   mLat.textContent = `${Math.round(frameCounter.latency)} ms`;
 
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(8, 8, 190, 68);
   ctx.fillStyle = "#fff";
@@ -358,13 +367,12 @@ hands.onResults(async (results) => {
   ctx.restore();
 });
 
-// Kamera
+// Camera
 const camera = new Camera(video, {
   onFrame: async () => { await hands.send({ image: video }); },
   width: 640, height: 480
 });
 
-// ----------------- Alfabēta režģis -----------------
 const LATVIAN_ALPHABET = [
   "A", "Ā", "B", "C", "Č", "D", "E", "Ē", "F", "G", "Ģ", "H",
   "I", "Ī", "J", "K", "Ķ", "L", "Ļ", "M", "N", "Ņ", "O", "P",
@@ -417,7 +425,7 @@ function updateTrainingStateOnGrid() {
   });
 }
 
-// ----------------- UI notikumi + īsceļi -----------------
+// ----------------- UI Events + Shortcuts -----------------
 btnSave.onclick = () => saveSample();
 btnTrain.onclick = () => trainModel();
 btnExport.onclick = () => exportModelFiles();
@@ -429,7 +437,6 @@ window.addEventListener('keydown', (e) => {
   if (k === 't') trainModel();
 });
 
-// Pirms lapas aizvēršanas – persistē paraugus
 window.addEventListener('beforeunload', () => {
   try { persistSamples(); } catch {}
 });
