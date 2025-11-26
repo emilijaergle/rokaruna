@@ -155,7 +155,7 @@ async function trainModel() {
 
   smoothScores = new Array(labelSet.length).fill(0);
 
-  // ✅ metadata ar klašu secību publiskajai versijai
+  // lokālai lietošanai – nav kritiski publiskajai daļai
   trainedModel.metadata = { labelSet };
 
   persistSamples();
@@ -168,28 +168,42 @@ async function trainModel() {
   updateTrainingStateOnGrid();
 }
 
+// 🔴 SVARĪGI: pareizs export formāts ar labelSet iekš model.json
 async function exportModelFiles() {
-  if (!trainedModel) return alert("Nav modeļa ko eksportēt.");
+  if (!trainedModel) {
+    alert("Nav modeļa ko eksportēt.");
+    return;
+  }
 
   await trainedModel.save(tf.io.withSaveHandler(async (artifacts) => {
+    // tf.js saprotams model.json + mūsu labelSet
     const modelJson = {
       modelTopology: artifacts.modelTopology,
-      weightSpecs: artifacts.weightSpecs,
-      metadata: trainedModel.metadata || {}
+      weightsManifest: [
+        {
+          paths: ["weights.bin"],
+          weights: artifacts.weightSpecs
+        }
+      ],
+      labelSet: labelSet
     };
 
-    const jsonBlob = new Blob([JSON.stringify(modelJson)], { type: "application/json" });
-    const weightsBlob = new Blob([artifacts.weightData], { type: "application/octet-stream" });
+    const jsonBlob    = new Blob([JSON.stringify(modelJson)], { type: "application/json" });
+    const weightsBlob = new Blob([artifacts.weightData],      { type: "application/octet-stream" });
 
-    const a1 = document.createElement("a");
-    a1.href = URL.createObjectURL(jsonBlob);
-    a1.download = "model.json";
-    a1.click();
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
 
-    const a2 = document.createElement("a");
-    a2.href = URL.createObjectURL(weightsBlob);
-    a2.download = "weights.bin";
-    a2.click();
+    downloadBlob(jsonBlob,   "model.json");
+    downloadBlob(weightsBlob,"weights.bin");
 
     return {
       modelArtifactsInfo: {
@@ -200,7 +214,7 @@ async function exportModelFiles() {
     };
   }));
 
-  alert("Modelis eksportēts! Ieliec model.json + weights.bin public/model/");
+  alert("Modelis eksportēts! Ieliec model.json + weights.bin docs/model/ mapē.");
 }
 
 async function loadFromLocal() {
@@ -221,7 +235,6 @@ async function loadFromLocal() {
     const mdl = await tryLoadAnySavedModel();
     if (mdl) {
       trainedModel = mdl;
-      // ja metadata ir saglabājies, izvelkam labelSet
       const meta = trainedModel.metadata || {};
       labelSet = meta.labelSet || Array.from(new Set(labels));
       smoothScores = new Array(labelSet.length).fill(0);
@@ -264,7 +277,29 @@ function predict(landmarks) {
     const sum = smoothScores.reduce((a, b) => a + b, 0) || 1;
     const norm = smoothScores.map(v => v / sum);
     let maxI = 0, maxV = norm[0];
-    for (let i = 1; i < norm.length; i++) { if (norm[i] > maxV) { maxV = norm[i]; maxI = i; } }
+    for (let i = 1; i < norm.length; i++) { if (norm[i] > maxV) { maxV = i; maxV = norm[i]; } } // <- šeit mazs bugfix, zemāk būs pareizi
+    return { label: labelSet[maxI] || '?', conf: maxV };
+  });
+}
+
+// mazs bugfix: pareizā versija predict funkcijā
+function predict(landmarks) {
+  if (!trainedModel || !landmarks) return { label: '?', conf: 0 };
+  const flat = flattenLandmarks(landmarks);
+  return tf.tidy(() => {
+    const input = tf.tensor2d([flat]);
+    const probs = trainedModel.predict(input);
+    const vals = probs.dataSync();
+
+    if (!smoothScores || smoothScores.length !== vals.length) smoothScores = new Array(vals.length).fill(0);
+    for (let i = 0; i < vals.length; i++) smoothScores[i] = expSmooth(smoothScores[i], vals[i], ALPHA);
+
+    const sum = smoothScores.reduce((a, b) => a + b, 0) || 1;
+    const norm = smoothScores.map(v => v / sum);
+    let maxI = 0, maxV = norm[0];
+    for (let i = 1; i < norm.length; i++) {
+      if (norm[i] > maxV) { maxV = norm[i]; maxI = i; }
+    }
     const lbl = labelSet[maxI] || '?';
     return { label: lbl, conf: maxV };
   });

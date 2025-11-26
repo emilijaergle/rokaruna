@@ -20,7 +20,7 @@ minConfInput.addEventListener('input', () => {
 
 // ----------------- Modelis -----------------
 let trainedModel = null;
-let labelSet = [];    // klašu secība no metadata
+let labelSet = [];    // klašu secība no model.json
 let smoothScores = null;
 
 // Stabilizācija
@@ -77,12 +77,19 @@ function speak(text) {
 
 // ----------------- Modelis: ielāde un prognoze -----------------
 async function loadPretrainedModel() {
+  // vispirms nolasa raw JSON, lai dabūtu labelSet
+  const res = await fetch("./model/model.json");
+  if (!res.ok) throw new Error("model.json fetch failed: " + res.status);
+  const raw = await res.json();
+
+  labelSet = raw.labelSet || [];
+  console.log("✅ Ielādēts labelSet:", labelSet);
+
+  // pēc tam ielādē pašu modeli (tf.js pats izmantos weightsManifest)
   trainedModel = await tf.loadLayersModel("./model/model.json");
-  // labelSet glabājas model.json metadata
-  const meta = trainedModel?.metadata || {};
-  labelSet = meta.labelSet || [];
   smoothScores = new Array(labelSet.length).fill(0);
-  console.log("✅ Modelis ielādēts. Klases:", labelSet);
+
+  console.log("✅ Modelis ielādēts. Klašu skaits:", labelSet.length);
 }
 
 function predict(landmarks) {
@@ -99,7 +106,9 @@ function predict(landmarks) {
     const sum = smoothScores.reduce((a, b) => a + b, 0) || 1;
     const norm = smoothScores.map(v => v / sum);
     let maxI = 0, maxV = norm[0];
-    for (let i = 1; i < norm.length; i++) { if (norm[i] > maxV) { maxV = norm[i]; maxI = i; } }
+    for (let i = 1; i < norm.length; i++) {
+      if (norm[i] > maxV) { maxV = norm[i]; maxI = i; }
+    }
     const lbl = labelSet[maxI] || '?';
     return { label: lbl, conf: maxV };
   });
