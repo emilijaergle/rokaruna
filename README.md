@@ -64,23 +64,6 @@ Simply open the public interface: docs/index.html
 
 ---
 
-## 🌐 GitHub Pages Deployment
-
-```
-git status
-```
-```
-git add .
-```
-```
-git commit -m "commit changes"
-```
-```
-git push
-```
-
----
-
 ## 🤝 Author
 
 **Emīlija Ērgle**
